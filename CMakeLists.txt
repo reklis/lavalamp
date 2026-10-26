@@ -30,6 +30,7 @@ add_library(lavalamp_core STATIC
   src/metrics/procfs.cpp
   src/metrics/collector.cpp
   src/noise.cpp
+  src/sim.cpp
 )
 target_include_directories(lavalamp_core PUBLIC src)
 target_link_libraries(lavalamp_core PUBLIC Threads::Threads)
@@ -55,6 +56,7 @@ add_executable(lavalamp_tests
   tests/test_thermal.cpp
   tests/test_collector.cpp
   tests/test_noise.cpp
+  tests/test_sim.cpp
 )
 target_link_libraries(lavalamp_tests PRIVATE lavalamp_core)
 target_include_directories(lavalamp_tests PRIVATE tests)
