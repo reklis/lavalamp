@@ -18,6 +18,7 @@ add_library(lavalamp_core STATIC
   src/glyph.cpp
   src/field.cpp
   src/renderer.cpp
+  src/term.cpp
 )
 target_include_directories(lavalamp_core PUBLIC src)
 
@@ -34,6 +35,7 @@ add_executable(lavalamp_tests
   tests/test_palette.cpp
   tests/test_glyph.cpp
   tests/test_renderer.cpp
+  tests/test_term.cpp
 )
 target_link_libraries(lavalamp_tests PRIVATE lavalamp_core)
 target_include_directories(lavalamp_tests PRIVATE tests)
