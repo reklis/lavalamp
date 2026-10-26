@@ -28,24 +28,39 @@ struct TestRegistrar {
   static TestRegistrar registrar_##name(#name, __FILE__, &name);     \
   static void name()
 
+// The comparisons live in function templates rather than inside the macros,
+// and the macros are variadic, because braced initialisers are extremely
+// common arguments here -- CHECK_EQ(xterm256_to_rgb(16), Rgb{0, 0, 0}) looks
+// like four macro arguments to the preprocessor. Pasting __VA_ARGS__ into a
+// function call instead lets the compiler's grammar group the braces.
+template <typename A, typename B>
+bool harness_equal(const A& a, const B& b) {
+  return a == b;
+}
+
+template <typename A, typename B>
+bool harness_near(const A& a, const B& b, double epsilon) {
+  return std::fabs(static_cast<double>(a) - static_cast<double>(b)) <= epsilon;
+}
+
 // Failures record the stringified expression rather than the operand values.
 // That keeps the macros usable on any type with the relevant operator --
 // std::vector<std::uint8_t> comparisons in the palette tests, for instance --
 // without the harness needing to know how to print it.
-#define CHECK(expr)                                                  \
+#define CHECK(...)                                                   \
   do {                                                               \
-    if (!(expr)) record_failure(__FILE__, __LINE__, "CHECK(" #expr ")"); \
+    if (!(__VA_ARGS__))                                              \
+      record_failure(__FILE__, __LINE__, "CHECK(" #__VA_ARGS__ ")"); \
   } while (0)
 
-#define CHECK_EQ(a, b)                                               \
+#define CHECK_EQ(...)                                                \
   do {                                                               \
-    if (!((a) == (b)))                                               \
-      record_failure(__FILE__, __LINE__, "CHECK_EQ(" #a ", " #b ")"); \
+    if (!harness_equal(__VA_ARGS__))                                 \
+      record_failure(__FILE__, __LINE__, "CHECK_EQ(" #__VA_ARGS__ ")"); \
   } while (0)
 
-#define CHECK_NEAR(a, b, eps)                                        \
+#define CHECK_NEAR(...)                                              \
   do {                                                               \
-    if (!(std::fabs(static_cast<double>(a) - static_cast<double>(b)) <= (eps))) \
-      record_failure(__FILE__, __LINE__,                             \
-                     "CHECK_NEAR(" #a ", " #b ", " #eps ")");        \
+    if (!harness_near(__VA_ARGS__))                                  \
+      record_failure(__FILE__, __LINE__, "CHECK_NEAR(" #__VA_ARGS__ ")"); \
   } while (0)
