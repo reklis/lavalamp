@@ -65,3 +65,31 @@ TEST(ramp_change_repaints_even_when_field_is_static) {
   r.render(f, build_ramp(1.0, 32), second);
   CHECK(second.data.find("\x1b[48;5;") != std::string::npos);
 }
+
+TEST(frames_are_wrapped_in_synchronized_output_markers) {
+  // Without DEC mode 2026 the terminal composites whenever its own repaint
+  // timer fires, which lands mid-write: a frame is ~100 KB at 200x50 but a
+  // pty buffer is ~64 KB, so write() blocks partway and the terminal shows
+  // part of the new frame over part of the old one. The markers tell it to
+  // buffer and present the whole frame at once.
+  Field f(4, 2);
+  f.fill(0.0);
+  Renderer r(4, 1);
+  StringSink s;
+  r.render(f, build_ramp(0.5, 32), s);
+  CHECK(s.data.rfind("\x1b[?2026h", 0) == 0);  // begins the frame
+  CHECK(s.data.size() >= 8 && s.data.compare(s.data.size() - 8, 8, "\x1b[?2026l") == 0);
+}
+
+TEST(an_unchanged_frame_emits_nothing_at_all) {
+  // Not even an empty begin/end pair: a terminal that sees a synchronized
+  // update every frame may still schedule a present for each one.
+  Field f(4, 2);
+  f.fill(0.0);
+  Renderer r(4, 1);
+  Ramp p = build_ramp(0.5, 32);
+  StringSink first, second;
+  r.render(f, p, first);
+  r.render(f, p, second);
+  CHECK(second.data.empty());
+}

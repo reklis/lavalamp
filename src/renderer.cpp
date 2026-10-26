@@ -99,5 +99,20 @@ void Renderer::render(const Field& field, const Ramp& ramp, Sink& sink) {
   }
 
   dirty_ = false;
-  if (!buffer_.empty()) sink.write(buffer_);
+  if (buffer_.empty()) return;
+
+  // Synchronized output (DEC private mode 2026). A frame can run to ~100 KB
+  // on a large terminal while a pty buffer is around 64 KB, so write() blocks
+  // partway through and the terminal -- which composites on its own repaint
+  // timer, not ours -- presents part of the new frame over part of the old
+  // one. These markers tell it to buffer everything between them and present
+  // it in one go. Terminals that do not implement the mode ignore both.
+  //
+  // Emitted only when there is something to draw: a terminal that is handed a
+  // synchronized update every frame may schedule a present for each one even
+  // when the payload is empty.
+  frame_.assign("\x1b[?2026h");
+  frame_ += buffer_;
+  frame_ += "\x1b[?2026l";
+  sink.write(frame_);
 }

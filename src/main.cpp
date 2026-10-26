@@ -16,7 +16,11 @@
 
 namespace {
 
-constexpr int kDefaultFps = 30;
+// 60, not 30. Terminals composite on their own repaint timer synced to the
+// display, so a 30 fps stream against a 60 Hz+ monitor holds each frame for
+// an uneven number of refreshes and the motion judders. 60 divides evenly
+// into the common refresh rates, and costs ~4% of one core at 200x50.
+constexpr int kDefaultFps = 60;
 
 // Rebuilding the palette means ~32 nearest-colour searches over 240 entries,
 // so it is cached and only recomputed when the temperature has actually moved.
@@ -30,6 +34,7 @@ constexpr double kNeutralTemp = 0.35;
 struct Options {
   int fps = kDefaultFps;
   bool alt_screen = true;
+  bool trace = false;
   TermSize forced_size{0, 0};  // zero means "ask the terminal"
 };
 
@@ -41,6 +46,8 @@ Options parse_options(int argc, char** argv) {
     const std::string_view argument(argv[i]);
     if (argument == "--no-alt-screen") {
       options.alt_screen = false;
+    } else if (argument == "--trace") {
+      options.trace = true;
     } else if (argument == "--fps" && i + 1 < argc) {
       const int value = std::atoi(argv[++i]);
       if (value > 0 && value <= 240) options.fps = value;
@@ -130,10 +137,23 @@ int run_lamp(const Options& options) {
         ramp_temp = temp;
       }
 
+      const auto after_sim = std::chrono::steady_clock::now();
+
       renderer.render(field, ramp, sink);
 
-      const auto elapsed = std::chrono::steady_clock::now() - frame_start;
+      const auto after_render = std::chrono::steady_clock::now();
+      const auto elapsed = after_render - frame_start;
       if (elapsed < frame_budget) std::this_thread::sleep_for(frame_budget - elapsed);
+
+      if (options.trace) {
+        const auto after_sleep = std::chrono::steady_clock::now();
+        std::fprintf(stderr, "dt=%.2f sim=%.2f render=%.2f sleep=%.2f blobs=%zu\n",
+                     dt * 1000.0,
+                     std::chrono::duration<double>(after_sim - frame_start).count() * 1000.0,
+                     std::chrono::duration<double>(after_render - after_sim).count() * 1000.0,
+                     std::chrono::duration<double>(after_sleep - after_render).count() * 1000.0,
+                     sim.blobs().size());
+      }
     }
 
     collector.stop();

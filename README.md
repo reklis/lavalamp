@@ -75,7 +75,8 @@ Not configuration — these exist for tuning and are not a supported interface.
 
 | Flag | Effect |
 |---|---|
-| `--fps N` | Override the 30 fps target |
+| `--fps N` | Override the 60 fps target |
+| `--trace` | Per-frame timing to stderr (dt, sim, render, sleep) |
 | `--size WxH` | Force a size instead of asking the terminal |
 | `--no-alt-screen` | Draw on the normal screen |
 

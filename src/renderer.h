@@ -57,4 +57,7 @@ class Renderer {
   bool dirty_ = true;
   std::vector<Cell> previous_;
   std::string buffer_;
+  // Kept as a member so the per-frame concatenation reuses its capacity
+  // instead of allocating ~100 KB thirty times a second.
+  std::string frame_;
 };
