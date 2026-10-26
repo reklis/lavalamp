@@ -5,9 +5,9 @@
 #include <cstdio>
 #include <cstdlib>
 #include <dirent.h>
-#include <fstream>
-#include <sstream>
 #include <unistd.h>
+
+#include "metrics/procfs.h"
 
 namespace {
 
@@ -54,14 +54,6 @@ std::optional<double> parse_first_percent_line(std::string_view text) {
     position = newline + 1;
   }
   return std::nullopt;
-}
-
-std::string read_whole_file(const std::string& path) {
-  std::ifstream stream(path);
-  if (!stream) return {};
-  std::ostringstream contents;
-  contents << stream.rdbuf();
-  return contents.str();
 }
 
 bool executable_on_path(const char* name) {
@@ -153,7 +145,7 @@ std::optional<double> GpuSource::sample() {
   }
 
   for (const std::string& path : amd_paths_) {
-    readings.push_back(parse_gpu_busy_percent(read_whole_file(path)));
+    readings.push_back(parse_gpu_busy_percent(read_file(path).value_or(std::string{})));
   }
 
   return combine_gpu(readings);

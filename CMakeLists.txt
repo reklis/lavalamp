@@ -12,6 +12,9 @@ add_compile_options(-Wall -Wextra)
 
 # Sources are listed explicitly rather than globbed: each task adds its own
 # files here, and a glob would silently miss them until the next configure.
+set(THREADS_PREFER_PTHREAD_FLAG ON)
+find_package(Threads REQUIRED)
+
 add_library(lavalamp_core STATIC
   src/color.cpp
   src/palette.cpp
@@ -24,8 +27,11 @@ add_library(lavalamp_core STATIC
   src/metrics/gpu.cpp
   src/metrics/net.cpp
   src/metrics/thermal.cpp
+  src/metrics/procfs.cpp
+  src/metrics/collector.cpp
 )
 target_include_directories(lavalamp_core PUBLIC src)
+target_link_libraries(lavalamp_core PUBLIC Threads::Threads)
 
 add_executable(lavalamp src/main.cpp)
 target_link_libraries(lavalamp PRIVATE lavalamp_core)
@@ -46,6 +52,7 @@ add_executable(lavalamp_tests
   tests/test_gpu.cpp
   tests/test_net.cpp
   tests/test_thermal.cpp
+  tests/test_collector.cpp
 )
 target_link_libraries(lavalamp_tests PRIVATE lavalamp_core)
 target_include_directories(lavalamp_tests PRIVATE tests)

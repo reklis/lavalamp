@@ -4,8 +4,8 @@
 #include <array>
 #include <charconv>
 #include <dirent.h>
-#include <fstream>
-#include <sstream>
+
+#include "metrics/procfs.h"
 
 namespace {
 
@@ -17,14 +17,6 @@ constexpr double kMinPlausibleCelsius = 1.0;
 constexpr double kMaxPlausibleCelsius = 150.0;
 
 constexpr std::array<std::string_view, 3> kPreferredTypes = {"acpitz", "x86_pkg_temp", "k10temp"};
-
-std::string read_whole_file(const std::string& path) {
-  std::ifstream stream(path);
-  if (!stream) return {};
-  std::ostringstream contents;
-  contents << stream.rdbuf();
-  return contents.str();
-}
 
 std::string_view trim(std::string_view text) {
   while (!text.empty() && (text.front() == ' ' || text.front() == '\t')) text.remove_prefix(1);
@@ -76,13 +68,13 @@ std::vector<std::string> discover_thermal_paths() {
 
     const std::string base = std::string("/sys/class/thermal/") + entry->d_name;
     const std::string temp_path = base + "/temp";
-    if (read_whole_file(temp_path).empty()) continue;
+    if (!read_file(temp_path).has_value()) continue;
 
     all.push_back(temp_path);
 
     // Held in a named string: trim() returns a view, and a view into a
     // temporary would dangle the moment this statement ended.
-    const std::string type_contents = read_whole_file(base + "/type");
+    const std::string type_contents = read_file(base + "/type").value_or(std::string{});
     const std::string_view type = trim(type_contents);
     if (std::find(kPreferredTypes.begin(), kPreferredTypes.end(), type) !=
         kPreferredTypes.end()) {
@@ -102,7 +94,7 @@ std::optional<double> ThermalSource::sample() {
   std::optional<double> hottest;
 
   for (const std::string& path : paths_) {
-    const std::optional<double> celsius = parse_thermal_temp(read_whole_file(path));
+    const std::optional<double> celsius = parse_thermal_temp(read_file(path).value_or(std::string{}));
     if (!celsius.has_value()) continue;
     if (!hottest.has_value() || *celsius > *hottest) hottest = celsius;
   }
