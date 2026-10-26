@@ -15,6 +15,7 @@ add_compile_options(-Wall -Wextra)
 add_library(lavalamp_core STATIC
   src/color.cpp
   src/palette.cpp
+  src/glyph.cpp
 )
 target_include_directories(lavalamp_core PUBLIC src)
 
@@ -29,6 +30,7 @@ add_executable(lavalamp_tests
   tests/test_smoke.cpp
   tests/test_color.cpp
   tests/test_palette.cpp
+  tests/test_glyph.cpp
 )
 target_link_libraries(lavalamp_tests PRIVATE lavalamp_core)
 target_include_directories(lavalamp_tests PRIVATE tests)
