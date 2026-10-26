@@ -162,6 +162,44 @@ TEST(network_bursts_inject_blobs_at_the_floor) {
   CHECK(s.blobs().size() > before);  // impulses spawned droplets
 }
 
+TEST(sustained_network_traffic_cannot_flood_the_lamp) {
+  for (double net : {0.05, 0.2, 1.0}) {
+    LavaSim s(160, 72, 42);
+    Heat h;
+    h.net = net;
+    h.net_ok = true;
+    h.cpu = 0.1;
+    h.cpu_ok = true;
+    s.set_heat(h);
+    const double initial_area = total_blob_area(s);
+    Field field(160, 72);
+    double worst_area_error = 0.0;
+    double least_contrast = 1.0;
+    int fewest_empty = field.width() * field.height();
+    std::size_t most_blobs = 0;
+
+    // Half an hour, including a background trickle: a count cap alone did
+    // not help because merges made room for more mass to enter indefinitely.
+    for (int second = 0; second < 1800; ++second) {
+      for (int frame = 0; frame < 60; ++frame) s.step(1.0 / 60);
+      worst_area_error = std::max(worst_area_error, std::abs(total_blob_area(s) - initial_area));
+      most_blobs = std::max(most_blobs, s.blobs().size());
+      if (second % 60 != 59) continue;
+
+      s.sample_into(field);
+      least_contrast = std::min(least_contrast, max_field_value(field) - min_field_value(field));
+      int empty = 0;
+      for (int y = 0; y < field.height(); ++y)
+        for (int x = 0; x < field.width(); ++x) empty += field.at(x, y) == 0.0;
+      fewest_empty = std::min(fewest_empty, empty);
+    }
+    CHECK(worst_area_error < initial_area * 1e-9);
+    CHECK(most_blobs <= 44);
+    CHECK(least_contrast > 0.2);
+    CHECK(fewest_empty > field.width() * field.height() / 5);
+  }
+}
+
 TEST(no_network_traffic_injects_nothing) {
   LavaSim a(80, 50, 8);
   Heat quiet;

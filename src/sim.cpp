@@ -15,13 +15,12 @@ constexpr double kPi = 3.14159265358979323846;
 // Idle keeps few, fat, lazy globs; load breaks them into more, busier ones.
 constexpr std::size_t kMinBlobs = 7;
 constexpr std::size_t kMaxBlobs = 18;
-// Headroom above kMaxBlobs for network droplets, so a sustained transfer
-// cannot grow the population without bound.
+// Headroom above kMaxBlobs for network droplets. This caps object count,
+// not wax volume: jets must also conserve area when merges free up slots.
 constexpr std::size_t kHardMaxBlobs = 44;
 
-// Fraction of the lamp filled with wax. Total area is a conserved quantity:
-// merges and splits both preserve it, so the lamp neither dries out nor
-// floods, and only network droplets add to it.
+// Fraction of the lamp filled with wax. Merges, splits and network jets all
+// conserve total area, so even sustained traffic cannot flood the lamp.
 constexpr double kFillFraction = 0.22;
 
 // --- Forces ----------------------------------------------------------------
@@ -212,19 +211,33 @@ void LavaSim::emit_impulses(double dt) {
   if (net <= 0.0) return;
 
   // Traffic is spiky, so it gets discrete events rather than a dial: bursts
-  // fire jets of droplets up from the floor.
+  // fire jets of droplets up from the floor, reusing wax already in the lamp.
   impulse_credit_ += net * kImpulseRatePerSecond * dt;
 
   std::uniform_real_distribution<double> unit(0.0, 1.0);
   while (impulse_credit_ >= 1.0) {
     impulse_credit_ -= 1.0;
-    if (blobs_.size() >= kHardMaxBlobs) break;
+    if (blobs_.size() >= kHardMaxBlobs || blobs_.empty()) break;
+
+    // Peel each droplet from the largest glob. A population cap alone is not
+    // a volume cap: merges keep freeing slots, so adding fresh wax here used
+    // to saturate the entire field during long runs. Limit the donation to
+    // a quarter of the source's area so a fragmented lamp keeps a viable
+    // source glob, too.
+    auto source = std::max_element(blobs_.begin(), blobs_.end(),
+                                  [](const Blob& a, const Blob& b) {
+                                    return a.radius < b.radius;
+                                  });
+    const double droplet_radius = std::min(base_radius() * kImpulseRadiusFactor,
+                                          source->radius * 0.5);
+    source->radius = std::sqrt(source->radius * source->radius -
+                               droplet_radius * droplet_radius);
 
     Blob droplet;
     droplet.pos = Vec2{unit(rng_) * width_, height_ * 0.98};
     droplet.vel = Vec2{(unit(rng_) - 0.5) * kImpulseSpeed * 0.3,
                        -kImpulseSpeed * (0.7 + 0.6 * unit(rng_))};
-    droplet.radius = base_radius() * kImpulseRadiusFactor;
+    droplet.radius = droplet_radius;
     droplet.temp = 1.0;
     blobs_.push_back(droplet);
   }
