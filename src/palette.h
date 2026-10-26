@@ -15,7 +15,11 @@ struct Ramp {
   std::uint8_t operator[](std::size_t i) const { return indices[i]; }
 };
 
-constexpr std::size_t kDefaultRampEntries = 32;
+// 18, not 32: wider bands mean adjacent vertical samples land in the SAME
+// band more often, which is what makes the dither branch in select_cell fire.
+// At 32 the gradient crossed a band almost every pixel and the lamp rendered
+// as nothing but half-blocks, with no grain at all.
+constexpr std::size_t kDefaultRampEntries = 18;
 
 // `temperature01` blends between the cool palette (deep purples and magentas,
 // an idle machine) and the hot one (orange through to white-hot). Values

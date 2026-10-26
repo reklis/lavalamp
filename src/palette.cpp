@@ -7,23 +7,29 @@
 
 namespace {
 
-// Cool: a machine at rest. Near-black through deep purple and magenta into
-// red. Deliberately never reaches a bright top -- an idle lamp should look
-// like it is smouldering, not burning.
+// Cool: a machine at rest. Deep purple through magenta into red.
+// Deliberately never reaches a bright top -- an idle lamp should look like it
+// is smouldering, not burning.
+//
+// The darkest entry is a visible purple rather than near-black on purpose,
+// and is deliberately above level ~47 per channel. Roughly 70% of cells sit
+// in the lowest band, and anything darker than that quantises into xterm's
+// GREY ramp (232-255) rather than its colour cube -- which made the screen
+// read as an empty black terminal instead of a lamp full of dark fluid.
 constexpr std::array<Rgb, 6> kCoolControl = {{
-    Rgb{6, 3, 12},
-    Rgb{34, 9, 52},
+    Rgb{64, 16, 76},
+    Rgb{86, 16, 96},
     Rgb{84, 14, 88},
     Rgb{142, 20, 92},
     Rgb{190, 34, 62},
     Rgb{226, 62, 40},
 }};
 
-// Hot: a machine under load. Dark red through orange and amber to a
-// near-white core.
+// Hot: a machine under load. Dark maroon through orange and amber to a
+// near-white core. Same reasoning as above for the darkest entry.
 constexpr std::array<Rgb, 7> kHotControl = {{
-    Rgb{14, 2, 2},
-    Rgb{72, 8, 6},
+    Rgb{80, 22, 26},
+    Rgb{112, 24, 14},
     Rgb{140, 24, 8},
     Rgb{204, 70, 10},
     Rgb{240, 140, 22},

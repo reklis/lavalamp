@@ -20,16 +20,21 @@ constexpr std::size_t kHardMaxBlobs = 44;
 // Fraction of the lamp filled with wax. Total area is a conserved quantity:
 // merges and splits both preserve it, so the lamp neither dries out nor
 // floods, and only network droplets add to it.
-constexpr double kFillFraction = 0.18;
+constexpr double kFillFraction = 0.22;
 
 // --- Forces ----------------------------------------------------------------
 constexpr double kGravity = 8.0;
 constexpr double kBuoyancyBase = 18.0;   // at idle: hot wax still rises
-constexpr double kBuoyancyGain = 40.0;   // scaled by cpu
+constexpr double kBuoyancyGain = 30.0;   // scaled by cpu
 constexpr double kDrag = 1.4;
 
 constexpr double kHeatRate = 0.9;        // per second, at the floor
 constexpr double kCoolRate = 0.7;        // per second, at the ceiling
+// cpu drives the whole convection RATE, not just the force. Scaling only
+// buoyancy made a loaded lamp pin every blob against the ceiling: the force
+// overwhelmed gravity faster than the blobs could shed heat, so the cycle
+// jammed instead of speeding up.
+constexpr double kConvectionRateGain = 1.5;
 constexpr double kAmbientCoolRate = 0.1;
 constexpr double kHeatZoneFraction = 0.25;
 
@@ -40,8 +45,8 @@ constexpr double kTurbulenceBase = 2.0;
 constexpr double kTurbulenceGain = 28.0;  // scaled by gpu
 
 // --- Merge and split -------------------------------------------------------
-constexpr double kMergeFactor = 0.55;    // of the summed radii
-constexpr double kMaxRadiusFactor = 2.1; // of base radius, before forced split
+constexpr double kMergeFactor = 0.42;    // of the summed radii
+constexpr double kMaxRadiusFactor = 1.6; // of base radius, before forced split
 constexpr double kMinSplitRadiusFactor = 0.65;
 constexpr double kShearSplitThreshold = 14.0;
 
@@ -51,8 +56,8 @@ constexpr double kImpulseSpeed = 26.0;
 constexpr double kImpulseRadiusFactor = 0.35;
 
 // --- Field sampling --------------------------------------------------------
-constexpr double kInfluenceFactor = 2.2;  // influence radius / blob radius
-constexpr double kFieldGain = 0.9;        // a lone blob core, before overlap
+constexpr double kInfluenceFactor = 1.7;  // influence radius / blob radius
+constexpr double kFieldGain = 0.85;        // a lone blob core, before overlap
 
 constexpr double kMaxTimestep = 1.0 / 15.0;
 
@@ -133,6 +138,7 @@ void LavaSim::integrate(double dt) {
 
   const double buoyancy = kBuoyancyBase + kBuoyancyGain * cpu;
   const double turbulence = kTurbulenceBase + kTurbulenceGain * gpu;
+  const double convection = 1.0 + kConvectionRateGain * cpu;
 
   const double heat_zone = height_ * (1.0 - kHeatZoneFraction);
   const double cool_zone = height_ * kHeatZoneFraction;
@@ -140,9 +146,9 @@ void LavaSim::integrate(double dt) {
   for (Blob& blob : blobs_) {
     // Heat at the floor, shed at the ceiling, lose a little everywhere.
     if (blob.pos.y > heat_zone) {
-      blob.temp += kHeatRate * dt * (1.0 - blob.temp);
+      blob.temp += kHeatRate * convection * dt * (1.0 - blob.temp);
     } else if (blob.pos.y < cool_zone) {
-      blob.temp -= kCoolRate * dt * blob.temp;
+      blob.temp -= kCoolRate * convection * dt * blob.temp;
     }
     blob.temp -= kAmbientCoolRate * dt * blob.temp;
     blob.temp = clamp01(blob.temp);

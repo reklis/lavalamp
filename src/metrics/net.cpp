@@ -8,10 +8,15 @@
 
 namespace {
 
-// Floor for the adaptive ceiling: 256 KiB/s. Without a floor, the first
-// trickle of traffic on an idle machine would become the reference peak and
-// read as a full-scale burst.
-constexpr double kCeilingFloor = 256.0 * 1024.0;
+// The rate below which traffic counts as nothing. It appears as the unit of
+// the log curve, not as a cutoff: scaling by log1p(rate / floor) is what
+// makes an idle trickle read low. A bare log10(1 + rate) spans only 5-7 over
+// the entire useful range, so ordinary background chatter came out near
+// maximum and fired network impulses constantly.
+constexpr double kRateFloor = 64.0 * 1024.0;
+// Minimum reference peak, so the first trickle on an idle machine does not
+// become the ceiling and read as a full-scale burst.
+constexpr double kCeilingFloor = 4.0 * 1024.0 * 1024.0;
 // The ceiling relaxes by this factor per second, so an old bulk transfer does
 // not permanently flatten the scale.
 constexpr double kCeilingDecayPerSecond = 0.97;
@@ -120,6 +125,6 @@ std::optional<double> NetSource::sample(std::string_view proc_net_dev, double dt
 
   ceiling_ = std::max({kCeilingFloor, ceiling_ * std::pow(kCeilingDecayPerSecond, dt), rate});
 
-  const double scaled = std::log10(1.0 + rate) / std::log10(1.0 + ceiling_);
+  const double scaled = std::log1p(rate / kRateFloor) / std::log1p(ceiling_ / kRateFloor);
   return std::clamp(scaled, 0.0, 1.0);
 }

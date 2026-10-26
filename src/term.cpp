@@ -44,8 +44,8 @@ std::optional<TermSize> query_term_size(int fd) {
   return TermSize{static_cast<int>(ws.ws_col), static_cast<int>(ws.ws_row)};
 }
 
-TermSize query_term_size_or(TermSize fallback) {
-  return query_term_size(STDOUT_FILENO).value_or(fallback);
+TermSize query_term_size_or(int fd, TermSize fallback) {
+  return query_term_size(fd).value_or(fallback);
 }
 
 bool is_size_usable(TermSize size) {

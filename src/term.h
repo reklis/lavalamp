@@ -12,8 +12,9 @@ struct TermSize {
 std::optional<TermSize> query_term_size(int fd);
 
 // Returns `fallback` when the real size cannot be determined, so startup has
-// one code path rather than two.
-TermSize query_term_size_or(TermSize fallback);
+// one code path rather than two. Takes the fd explicitly so the startup
+// decision is testable without a terminal attached.
+TermSize query_term_size_or(int fd, TermSize fallback);
 
 // Below 20x10 there is not enough room for the lamp to read as anything, so
 // the program refuses rather than painting a corrupt handful of cells.
