@@ -180,3 +180,16 @@ TEST(resize_keeps_blobs_in_bounds) {  // Review Focus 3
   s.step(1.0 / 60);
   for (const Blob& b : s.blobs()) CHECK(b.pos.x <= 30 && b.pos.y <= 12);
 }
+
+TEST(make_seed_varies_without_using_random_device) {
+  // std::random_device throws std::system_error when its entropy source
+  // cannot be opened (minimal containers, chroots). The only call site sat
+  // INSIDE the TerminalSession scope, and an uncaught exception does not
+  // unwind under GCC -- so the destructor never ran and the user was left
+  // with no cursor and no echo, which is the one failure mode the spec says
+  // must never outlive the process.
+  const std::uint32_t a = make_seed();
+  const std::uint32_t b = make_seed();
+  CHECK(a != 0u);
+  CHECK(a != b);
+}

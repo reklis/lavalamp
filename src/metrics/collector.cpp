@@ -42,7 +42,7 @@ Heat Collector::snapshot() const {
   return published_;
 }
 
-void Collector::run() {
+void Collector::run() try {
   // The first poll only primes the cumulative-counter deltas; CPU and network
   // deliberately report nothing until the second one.
   poll_once(kPollSeconds);
@@ -65,6 +65,11 @@ void Collector::run() {
 
     poll_once(dt);
   }
+} catch (...) {
+  // An exception escaping a std::thread calls std::terminate, which would
+  // skip the TerminalSession destructor and leave the terminal wrecked. The
+  // lamp is better off losing its metrics and running on neutral values: the
+  // last published snapshot simply stops updating.
 }
 
 void Collector::poll_once(double dt) {

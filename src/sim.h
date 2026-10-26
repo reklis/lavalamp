@@ -8,6 +8,17 @@
 #include "metrics/heat.h"
 #include "vec2.h"
 
+// A seed for the simulation that cannot throw.
+//
+// Deliberately not std::random_device: that throws std::system_error when its
+// entropy source cannot be opened (minimal containers, chroots), and its only
+// call site is inside the TerminalSession scope. An uncaught exception does
+// not unwind the stack under GCC, so the session destructor would never run
+// and the user would be left with no cursor and no echo -- exactly the
+// failure mode the spec says must not outlive the process. Nothing here needs
+// cryptographic randomness; it only needs a different lamp each launch.
+std::uint32_t make_seed();
+
 // One glob of wax. Each carries its own temperature, which is what makes the
 // convection cycle emergent rather than scripted: nothing tells a blob to
 // turn around at the top, it just cools until gravity wins.

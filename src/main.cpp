@@ -1,9 +1,8 @@
 #include <chrono>
+#include <exception>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
-#include <cstring>
-#include <random>
 #include <string_view>
 #include <thread>
 #include <unistd.h>
@@ -58,8 +57,9 @@ Options parse_options(int argc, char** argv) {
 
 }  // namespace
 
-int main(int argc, char** argv) {
-  const Options options = parse_options(argc, argv);
+namespace {
+
+int run_lamp(const Options& options) {
 
   TermSize size = options.forced_size.cols > 0
                       ? options.forced_size
@@ -85,7 +85,7 @@ int main(int argc, char** argv) {
 
     Field field(size.cols, size.rows * 2);
     Renderer renderer(size.cols, size.rows);
-    LavaSim sim(size.cols, size.rows * 2, std::random_device{}());
+    LavaSim sim(size.cols, size.rows * 2, make_seed());
 
     Ramp ramp = build_ramp(kNeutralTemp, kDefaultRampEntries);
     double ramp_temp = kNeutralTemp;
@@ -144,4 +144,22 @@ int main(int argc, char** argv) {
     return 1;
   }
   return 0;
+}
+
+}  // namespace
+
+int main(int argc, char** argv) {
+  // Defence in depth for the same reason make_seed exists: anything that
+  // escapes run_lamp would reach std::terminate without unwinding, skipping
+  // the TerminalSession destructor and wrecking the user's terminal. Catching
+  // here means the stack unwinds first and the terminal is restored.
+  try {
+    return run_lamp(parse_options(argc, argv));
+  } catch (const std::exception& error) {
+    std::fprintf(stderr, "lavalamp: %s\n", error.what());
+    return 1;
+  } catch (...) {
+    std::fprintf(stderr, "lavalamp: unknown error\n");
+    return 1;
+  }
 }

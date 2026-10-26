@@ -1,6 +1,8 @@
 #include "sim.h"
 
 #include <algorithm>
+#include <atomic>
+#include <chrono>
 #include <cmath>
 
 #include "noise.h"
@@ -68,6 +70,23 @@ double channel(double value, bool available, double neutral) {
 }
 
 }  // namespace
+
+std::uint32_t make_seed() {
+  // Clock plus a counter: the counter guarantees successive calls differ even
+  // if the clock has not ticked between them.
+  static std::atomic<std::uint32_t> counter{0};
+  const auto now = std::chrono::steady_clock::now().time_since_epoch();
+  const auto ticks = static_cast<std::uint64_t>(
+      std::chrono::duration_cast<std::chrono::nanoseconds>(now).count());
+
+  std::uint32_t mixed = static_cast<std::uint32_t>(ticks) ^
+                        static_cast<std::uint32_t>(ticks >> 32) ^
+                        (counter.fetch_add(1) * 2654435761u);
+  mixed ^= mixed >> 16;
+  mixed *= 2246822519u;
+  mixed ^= mixed >> 13;
+  return mixed == 0 ? 1u : mixed;
+}
 
 LavaSim::LavaSim(double width, double height, std::uint32_t seed)
     : width_(std::max(width, 1.0)), height_(std::max(height, 1.0)), rng_(seed) {
