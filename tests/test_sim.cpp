@@ -40,6 +40,14 @@ double min_field_value(const Field& f) {
   return best;
 }
 
+double max_field_difference(const Field& a, const Field& b) {
+  double worst = 0.0;
+  for (int y = 0; y < a.height(); ++y)
+    for (int x = 0; x < a.width(); ++x)
+      worst = std::max(worst, std::abs(a.at(x, y) - b.at(x, y)));
+  return worst;
+}
+
 double mean_height_of_hottest_blob(const LavaSim& s) {
   const Blob* hottest = nullptr;
   for (const Blob& b : s.blobs())
@@ -232,17 +240,101 @@ TEST(make_seed_varies_without_using_random_device) {
   CHECK(a != b);
 }
 
+TEST(splitting_preserves_the_field_at_the_event_boundary) {
+  LavaSim s(160, 72, 1);
+  Heat busy;
+  busy.cpu = 1.0;
+  busy.cpu_ok = true;
+  s.set_heat(busy);
+  Field before(160, 72), after(160, 72);
+  s.sample_into(before);
+  const double area = total_blob_area(s);
+  s.step(1e-8);  // force a split with essentially no ordinary movement
+  s.sample_into(after);
+  CHECK_EQ(s.blobs().size(), 8u);
+  CHECK_NEAR(total_blob_area(s), area, area * 1e-12);
+  CHECK(max_field_difference(before, after) < 1e-6);
+}
+
+TEST(merging_preserves_the_field_at_the_event_boundary) {
+  LavaSim s(160, 72, 2);  // overlapping globs on the first step
+  Field before(160, 72), after(160, 72);
+  s.sample_into(before);
+  const double area = total_blob_area(s);
+  s.step(1e-8);
+  s.sample_into(after);
+  CHECK(s.blobs().size() < 7u);
+  CHECK_NEAR(total_blob_area(s), area, area * 1e-12);
+  CHECK(max_field_difference(before, after) < 1e-6);
+}
+
+TEST(network_birth_and_donation_preserve_the_field_at_the_event_boundary) {
+  LavaSim s(160, 72, 1);
+  Heat traffic;
+  traffic.net = 1.0;
+  traffic.net_ok = true;
+  s.set_heat(traffic);
+  for (int frame = 0; frame < 9; ++frame) s.step(1.0 / 60);
+  s.step(1.0 / 60 - 1e-8);  // just short of the first jet
+  LavaSim quiet = s;
+  quiet.set_heat(Heat{});
+  s.step(2e-8);
+  quiet.step(2e-8);
+  Field with_jet(160, 72), without_jet(160, 72);
+  s.sample_into(with_jet);
+  quiet.sample_into(without_jet);
+  CHECK_EQ(s.blobs().size(), quiet.blobs().size() + 1);
+  CHECK_NEAR(total_blob_area(s), total_blob_area(quiet), 1e-9);
+  CHECK(max_field_difference(with_jet, without_jet) < 1e-6);
+}
+
+TEST(shape_transitions_finish_without_a_delayed_pop_at_different_frame_rates) {
+  for (int fps : {30, 60, 120}) {
+    LavaSim s(160, 72, 1);
+    Heat busy;
+    busy.cpu = 1.0;
+    busy.cpu_ok = true;
+    s.set_heat(busy);
+    s.step(1e-8);  // begin the isolated split
+    s.set_heat(Heat{});
+
+    // Stop just before the visual morph finishes, then cross its endpoint
+    // with almost no movement. Clearing transition state must not cause a
+    // second, delayed jump to the physical blob shape.
+    double elapsed = 0.0;
+    while (elapsed < 0.35 - 1e-8) {
+      const double dt = std::min(1.0 / fps, 0.35 - 1e-8 - elapsed);
+      s.step(dt);
+      elapsed += dt;
+    }
+    int active = 0;
+    for (const Blob& blob : s.blobs()) active += blob.shape.count != 0;
+    CHECK_EQ(active, 2);
+    Field before(160, 72), after(160, 72);
+    s.sample_into(before);
+    s.step(2e-8);
+    s.sample_into(after);
+    for (const Blob& blob : s.blobs()) CHECK_EQ(blob.shape.count, 0u);
+    CHECK(max_field_difference(before, after) < 1e-6);
+  }
+}
+
+TEST(resize_scales_an_in_progress_shape_transition) {
+  LavaSim s(160, 72, 2);
+  s.step(1e-8);  // a merge, with non-zero lobe offsets
+  s.step(0.05);
+  Field before(160, 72), after(160, 72);
+  s.sample_into(before);
+  s.resize(320, 144);
+  // Same sample grid over a doubled lamp should produce the identical field.
+  s.sample_into(after);
+  CHECK(max_field_difference(before, after) < 1e-12);
+}
+
 TEST(a_split_does_not_teleport_its_children_apart) {
-  // Merges read as smooth because they fire only when the two blobs already
-  // overlap heavily -- the field already looked like one blob, so nothing
-  // structural changes. A split that places its children a full parent
-  // radius apart in ONE frame instantly creates a configuration MORE
-  // separated than the one that would have triggered a merge, and the eye
-  // reads that as two objects teleporting out of one. Per-pixel field delta
-  // is no larger than a merge's; the structure is what gives it away.
-  //
-  // So children must start effectively coincident and separate under their
-  // own velocity.
+  // Even with smooth size/brightness transitions, placing the children a full
+  // parent radius apart in ONE frame reads as two objects teleporting out of
+  // one. They must start coincident and separate under their own velocity.
   LavaSim s(100, 60, 42);
   Heat h;
   h.cpu = 1.0;

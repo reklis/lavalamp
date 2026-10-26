@@ -66,6 +66,24 @@ TEST(ramp_change_repaints_even_when_field_is_static) {
   CHECK(second.data.find("\x1b[48;5;") != std::string::npos);
 }
 
+TEST(rgb_ramps_emit_truecolor_sgr_and_repaint_rgb_only_changes) {
+  Field field(4, 2);
+  field.fill(0.0);
+  Renderer renderer(4, 1);
+  Ramp ramp{{rgb_color_code(Rgb{64, 16, 76})}};
+  StringSink first, second, unchanged;
+  renderer.render(field, ramp, first);
+  CHECK(first.data.find("\x1b[38;2;64;16;76m") != std::string::npos);
+  CHECK(first.data.find("\x1b[48;2;64;16;76m") != std::string::npos);
+  CHECK(first.data.find(";5;") == std::string::npos);
+  CHECK_EQ(count_occurrences(first.data, "\x1b[48;2;"), 1u);
+  ramp.indices[0] = rgb_color_code(Rgb{65, 16, 76});
+  renderer.render(field, ramp, second);
+  CHECK(second.data.find("\x1b[48;2;65;16;76m") != std::string::npos);
+  renderer.render(field, ramp, unchanged);
+  CHECK(unchanged.data.empty());
+}
+
 TEST(frames_are_wrapped_in_synchronized_output_markers) {
   // Without DEC mode 2026 the terminal composites whenever its own repaint
   // timer fires, which lands mid-write: a frame is ~100 KB at 200x50 but a

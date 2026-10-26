@@ -12,8 +12,8 @@ inline constexpr const char* kUpperHalf = "▀";
 
 struct Cell {
   const char* glyph = kShades[0];
-  std::uint8_t fg = 16;
-  std::uint8_t bg = 16;
+  ColorCode fg = 16;
+  ColorCode bg = 16;
 };
 
 bool operator==(const Cell& a, const Cell& b);
@@ -34,7 +34,7 @@ inline bool operator!=(const Cell& a, const Cell& b) { return !(a == b); }
 //     extends the effective colour depth well past the palette size and
 //     supplies the chunky grain that reads as hand-made ANSI art.
 //
-// Values outside [0, 1] are clamped. Both returned indices are always >= 16,
-// so every cell paints a real colour -- the terminal is filled with fluid,
-// never left showing its own default background.
+// Values outside [0, 1] are clamped. Both returned colours come from the
+// ramp (indexed or RGB), so every cell paints real fluid, never the terminal's
+// own default background.
 Cell select_cell(double top, double bottom, const Ramp& ramp);

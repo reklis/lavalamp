@@ -50,6 +50,9 @@ constexpr double kMergeFactor = 0.42;    // of the summed radii
 constexpr double kMaxRadiusFactor = 1.6; // of base radius, before forced split
 constexpr double kMinSplitRadiusFactor = 0.65;
 constexpr double kShearSplitThreshold = 14.0;
+// Shape changes need their own interpolation: smoothing activity or velocity
+// cannot hide the instantaneous replacement of one metaball kernel by two.
+constexpr double kShapeTransitionSeconds = 0.35;
 // A split separates its children over time instead of placing them apart.
 // Speed is in radii per second so the motion looks the same at any lamp size.
 // 3.0 was measured by tracking real split pairs, not guessed. The pair
@@ -63,8 +66,8 @@ constexpr double kShearSplitThreshold = 14.0;
 // is twice a blob's normal speed and flings the children 7 radii apart in 4
 // frames, which is the same jump the fix was meant to remove.
 constexpr double kSplitSeparationSpeed = 3.0;
-// Long enough for the children to clear the merge threshold: they part at
-// 4 radii/sec combined and the threshold is 0.84 radii, so ~0.2s suffices.
+// Long enough for the children to finish their shape morph and clear the
+// merge threshold before they can be joined again.
 constexpr double kSplitCooldown = 0.45;
 
 // --- Network impulses ------------------------------------------------------
@@ -82,6 +85,12 @@ double clamp01(double v) { return std::clamp(v, 0.0, 1.0); }
 
 double channel(double value, bool available, double neutral) {
   return available ? clamp01(value) : neutral;
+}
+
+void morph_from(Blob& blob, const ShapeLobe& lobe) {
+  blob.shape = ShapeTransition{};
+  blob.shape.lobes[0] = lobe;
+  blob.shape.count = 1;
 }
 
 }  // namespace
@@ -142,6 +151,12 @@ void LavaSim::resize(double width, double height) {
     blob.pos.x *= scale_x;
     blob.pos.y *= scale_y;
     blob.radius *= scale_r;
+    for (std::size_t i = 0; i < blob.shape.count; ++i) {
+      ShapeLobe& lobe = blob.shape.lobes[i];
+      lobe.offset.x *= scale_x;
+      lobe.offset.y *= scale_y;
+      lobe.radius *= scale_r;
+    }
   }
 
   width_ = new_width;
@@ -161,6 +176,10 @@ void LavaSim::step(double dt) {
 
   for (Blob& blob : blobs_) {
     blob.merge_cooldown = std::max(blob.merge_cooldown - clamped, 0.0);
+    if (blob.shape.count != 0) {
+      blob.shape.elapsed += clamped;
+      if (blob.shape.elapsed >= kShapeTransitionSeconds) blob.shape = ShapeTransition{};
+    }
   }
 
   integrate(clamped);
@@ -224,10 +243,13 @@ void LavaSim::emit_impulses(double dt) {
     // to saturate the entire field during long runs. Limit the donation to
     // a quarter of the source's area so a fragmented lamp keeps a viable
     // source glob, too.
-    auto source = std::max_element(blobs_.begin(), blobs_.end(),
-                                  [](const Blob& a, const Blob& b) {
-                                    return a.radius < b.radius;
-                                  });
+    auto source = blobs_.end();
+    for (auto it = blobs_.begin(); it != blobs_.end(); ++it) {
+      if (it->shape.count != 0) continue;
+      if (source == blobs_.end() || it->radius > source->radius) source = it;
+    }
+    if (source == blobs_.end()) break;  // don't interrupt a shape in flight
+    morph_from(*source, ShapeLobe{Vec2{}, source->radius, 1.0, 1.0});
     const double droplet_radius = std::min(base_radius() * kImpulseRadiusFactor,
                                           source->radius * 0.5);
     source->radius = std::sqrt(source->radius * source->radius -
@@ -239,6 +261,7 @@ void LavaSim::emit_impulses(double dt) {
                        -kImpulseSpeed * (0.7 + 0.6 * unit(rng_))};
     droplet.radius = droplet_radius;
     droplet.temp = 1.0;
+    morph_from(droplet, ShapeLobe{Vec2{}, droplet_radius * 0.25, 0.0, 1.0});
     blobs_.push_back(droplet);
   }
 }
@@ -249,7 +272,8 @@ void LavaSim::resolve_merges() {
       const Blob& a = blobs_[i];
       const Blob& b = blobs_[j];
 
-      if (a.merge_cooldown > 0.0 || b.merge_cooldown > 0.0) {
+      if (a.merge_cooldown > 0.0 || b.merge_cooldown > 0.0 ||
+          a.shape.count != 0 || b.shape.count != 0) {
         ++j;
         continue;
       }
@@ -271,6 +295,12 @@ void LavaSim::resolve_merges() {
       merged.vel = (a.vel * mass_a + b.vel * mass_b) * (1.0 / mass);
       merged.temp = (a.temp * mass_a + b.temp * mass_b) / mass;
       merged.merge_cooldown = 0.0;
+      // At t=0 these are exactly the two original kernels, including their
+      // brightness. They move together and grow into the single merged
+      // kernel; their final weights sum to one, not two.
+      morph_from(merged, ShapeLobe{a.pos - merged.pos, a.radius, 1.0, mass_a / mass});
+      merged.shape.lobes[1] = ShapeLobe{b.pos - merged.pos, b.radius, 1.0, mass_b / mass};
+      merged.shape.count = 2;
 
       blobs_[i] = merged;
       blobs_.erase(blobs_.begin() + static_cast<std::ptrdiff_t>(j));
@@ -298,7 +328,8 @@ void LavaSim::resolve_splits() {
 
   for (std::size_t i = 0; i < blobs_.size(); ++i) {
     const Blob& blob = blobs_[i];
-    if (blob.radius <= candidate_radius) continue;
+    if (blob.shape.count != 0 || blob.merge_cooldown > 0.0 ||
+        blob.radius <= candidate_radius) continue;
 
     const bool oversized = blob.radius > max_radius;
     const bool understaffed = blobs_.size() < target;
@@ -324,30 +355,23 @@ void LavaSim::resolve_splits() {
   const double angle = unit(rng_) * 2.0 * kPi;
   const Vec2 axis{std::cos(angle), std::sin(angle)};
 
-  // The children start effectively coincident and push apart under their own
-  // velocity, rather than being placed a parent-radius apart.
-  //
-  // This is the whole difference between a split that reads as a split and
-  // one that reads as a teleport. A merge looks smooth because it only fires
-  // once the two blobs already overlap heavily -- the field had already
-  // collapsed to a single blob, so nothing structural changes. Placing split
-  // children apart immediately did the reverse: it created, in one frame, a
-  // configuration MORE separated than the one that triggers a merge. The
-  // per-pixel field delta was no worse than a merge's; it was the sudden
-  // change in object structure that the eye caught.
-  const Vec2 nudge = axis * (child_radius * 0.02);
+  // Coincident half-weight copies reproduce the parent's field exactly.
+  // While the children move apart, each kernel shrinks toward its physical
+  // radius and gains its own full weight. Smooth motion alone wasn't enough:
+  // immediately substituting two small full-weight kernels caused a flash.
+  const ShapeLobe from_parent{Vec2{}, parent.radius, 0.5, 1.0};
   const Vec2 kick = axis * (child_radius * kSplitSeparationSpeed);
 
   Blob child = parent;
   child.radius = child_radius;
-  child.pos = parent.pos - nudge;
   child.vel = parent.vel - kick;
   child.merge_cooldown = kSplitCooldown;
+  morph_from(child, from_parent);
 
   parent.radius = child_radius;
-  parent.pos = parent.pos + nudge;
   parent.vel = parent.vel + kick;
   parent.merge_cooldown = kSplitCooldown;
+  morph_from(parent, from_parent);
 
   blobs_.push_back(child);
 }
@@ -383,12 +407,12 @@ void LavaSim::sample_into(Field& field) const {
   const double to_field_x = static_cast<double>(field_width) / width_;
   const double to_field_y = static_cast<double>(field_height) / height_;
 
-  for (const Blob& blob : blobs_) {
-    const double influence = blob.radius * kInfluenceFactor;
-    if (influence <= 0.0) continue;
+  const auto sample_lobe = [&](Vec2 pos, double radius, double weight) {
+    const double influence = radius * kInfluenceFactor;
+    if (influence <= 0.0 || weight <= 0.0) return;
 
-    const double centre_x = blob.pos.x * to_field_x;
-    const double centre_y = blob.pos.y * to_field_y;
+    const double centre_x = pos.x * to_field_x;
+    const double centre_y = pos.y * to_field_y;
     const double extent_x = influence * to_field_x;
     const double extent_y = influence * to_field_y;
 
@@ -399,9 +423,9 @@ void LavaSim::sample_into(Field& field) const {
     const int y_end = std::min(field_height - 1, static_cast<int>(std::ceil(centre_y + extent_y)));
 
     for (int y = y_begin; y <= y_end; ++y) {
-      const double dy = (static_cast<double>(y) / to_field_y) - blob.pos.y;
+      const double dy = (static_cast<double>(y) / to_field_y) - pos.y;
       for (int x = x_begin; x <= x_end; ++x) {
-        const double dx = (static_cast<double>(x) / to_field_x) - blob.pos.x;
+        const double dx = (static_cast<double>(x) / to_field_x) - pos.x;
 
         const double distance_sq = dx * dx + dy * dy;
         const double influence_sq = influence * influence;
@@ -410,8 +434,30 @@ void LavaSim::sample_into(Field& field) const {
         // Smooth polynomial falloff with finite support: C2 at the boundary,
         // so blob edges have no visible seam, and cullable.
         const double u = 1.0 - distance_sq / influence_sq;
-        field.at(x, y) += u * u * u;
+        field.at(x, y) += weight * u * u * u;
       }
+    }
+  };
+
+  for (const Blob& blob : blobs_) {
+    if (blob.shape.count == 0) {
+      sample_lobe(blob.pos, blob.radius, 1.0);
+      continue;
+    }
+    const double t = clamp01(blob.shape.elapsed / kShapeTransitionSeconds);
+    const double blend = t * t * (3.0 - 2.0 * t);  // zero slope at both ends
+    for (std::size_t i = 0; i < blob.shape.count; ++i) {
+      const ShapeLobe& lobe = blob.shape.lobes[i];
+      const Vec2 pos = blob.pos + lobe.offset * (1.0 - blend);
+      // Interpolate radius squared and weighted area together. Separately
+      // lerping radius and brightness makes merges/splits visibly swell in
+      // the middle even though their physical mass is conserved.
+      const double old_area = lobe.radius * lobe.radius;
+      const double new_area = blob.radius * blob.radius;
+      const double area = old_area * (1.0 - blend) + new_area * blend;
+      const double weighted_area = lobe.weight * old_area * (1.0 - blend) +
+                                   lobe.target_weight * new_area * blend;
+      sample_lobe(pos, std::sqrt(area), weighted_area / area);
     }
   }
 

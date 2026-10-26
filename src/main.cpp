@@ -22,8 +22,8 @@ namespace {
 // into the common refresh rates, and costs ~4% of one core at 200x50.
 constexpr int kDefaultFps = 60;
 
-// Rebuilding the palette means ~32 nearest-colour searches over 240 entries,
-// so it is cached and only recomputed when the temperature has actually moved.
+// Cache the quantised target palette; the displayed RGB palette fades toward
+// it every frame rather than switching when this threshold is crossed.
 constexpr double kRampRebuildThreshold = 0.02;
 
 // What each channel contributes when the machine does not expose it. Not zero
@@ -96,6 +96,11 @@ int run_lamp(const Options& options) {
 
     Ramp ramp = build_ramp(kNeutralTemp, kDefaultRampEntries);
     double ramp_temp = kNeutralTemp;
+    PaletteFade palette_fade;
+    const char* colorterm = std::getenv("COLORTERM");
+    const char* term = std::getenv("TERM");
+    const bool truecolor = supports_truecolor(colorterm ? colorterm : "", term ? term : "");
+    palette_fade.update(ramp, 0.0);  // seed the fade from the launch palette
 
     const auto frame_budget = std::chrono::duration<double>(1.0 / options.fps);
     auto previous = std::chrono::steady_clock::now();
@@ -139,7 +144,8 @@ int run_lamp(const Options& options) {
 
       const auto after_sim = std::chrono::steady_clock::now();
 
-      renderer.render(field, ramp, sink);
+      const Ramp& displayed = truecolor ? palette_fade.update(ramp, dt) : ramp;
+      renderer.render(field, displayed, sink);
 
       const auto after_render = std::chrono::steady_clock::now();
       const auto elapsed = after_render - frame_start;

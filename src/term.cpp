@@ -52,6 +52,10 @@ bool is_size_usable(TermSize size) {
   return size.cols >= kMinCols && size.rows >= kMinRows;
 }
 
+bool supports_truecolor(std::string_view colorterm, std::string_view term) {
+  return colorterm == "truecolor" || colorterm == "24bit" || term.ends_with("-direct");
+}
+
 TerminalSession::TerminalSession(int fd, bool use_alt_screen)
     : fd_(fd), use_alt_screen_(use_alt_screen) {
   if (::tcgetattr(fd_, &saved_termios_) == 0) {

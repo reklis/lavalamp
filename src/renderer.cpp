@@ -25,9 +25,19 @@ void append_cursor_move(std::string& out, int row, int col) {
   out.push_back('H');
 }
 
-void append_sgr(std::string& out, const char* prefix, std::uint8_t index) {
-  out += prefix;
-  append_uint(out, index);
+void append_sgr(std::string& out, bool foreground, ColorCode color) {
+  if ((color & kRgbColorFlag) != 0) {
+    const Rgb rgb = color_code_to_rgb(color);
+    out += foreground ? "\x1b[38;2;" : "\x1b[48;2;";
+    append_uint(out, rgb.r);
+    out.push_back(';');
+    append_uint(out, rgb.g);
+    out.push_back(';');
+    append_uint(out, rgb.b);
+  } else {
+    out += foreground ? "\x1b[38;5;" : "\x1b[48;5;";
+    append_uint(out, color);
+  }
   out.push_back('m');
 }
 
@@ -82,12 +92,12 @@ void Renderer::render(const Field& field, const Ramp& ramp, Sink& sink) {
       if (!dirty_ && previous_[index] == cell) continue;
 
       if (row != last_row || col != last_col) append_cursor_move(buffer_, row, col);
-      if (cell.fg != current_fg) {
-        append_sgr(buffer_, "\x1b[38;5;", cell.fg);
+      if (static_cast<int>(cell.fg) != current_fg) {
+        append_sgr(buffer_, true, cell.fg);
         current_fg = cell.fg;
       }
-      if (cell.bg != current_bg) {
-        append_sgr(buffer_, "\x1b[48;5;", cell.bg);
+      if (static_cast<int>(cell.bg) != current_bg) {
+        append_sgr(buffer_, false, cell.bg);
         current_bg = cell.bg;
       }
       buffer_ += cell.glyph;

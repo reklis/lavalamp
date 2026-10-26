@@ -12,6 +12,16 @@ TEST(xterm_grayscale_ramp) {
   CHECK_EQ(xterm256_to_rgb(255), Rgb{238, 238, 238});
 }
 
+TEST(terminal_color_codes_preserve_rgb_and_indexed_colors) {
+  for (const Rgb color : {Rgb{0, 0, 0}, Rgb{0, 0, 16}, Rgb{64, 16, 76}, Rgb{255, 255, 255}}) {
+    const ColorCode code = rgb_color_code(color);
+    CHECK(code > 255);
+    CHECK_EQ(color_code_to_rgb(code), color);
+  }
+  for (ColorCode code = 16; code <= 255; ++code)
+    CHECK_EQ(color_code_to_rgb(code), xterm256_to_rgb(static_cast<std::uint8_t>(code)));
+}
+
 TEST(quantize_is_inverse_on_palette_colors) {
   // every index in the 6x6x6 cube and gray ramp must round-trip
   for (int i = 16; i <= 255; ++i)

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <cstdint>
 #include <random>
 #include <vector>
@@ -19,6 +20,21 @@
 // cryptographic randomness; it only needs a different lamp each launch.
 std::uint32_t make_seed();
 
+// A starting field kernel, relative to its blob's moving centre. During a
+// shape transition it morphs toward that blob's physical radius/position.
+struct ShapeLobe {
+  Vec2 offset;
+  double radius = 1.0;
+  double weight = 1.0;
+  double target_weight = 1.0;
+};
+
+struct ShapeTransition {
+  std::array<ShapeLobe, 2> lobes{};
+  std::size_t count = 0;  // zero: render the ordinary physical blob
+  double elapsed = 0.0;
+};
+
 // One glob of wax. Each carries its own temperature, which is what makes the
 // convection cycle emergent rather than scripted: nothing tells a blob to
 // turn around at the top, it just cools until gravity wins.
@@ -33,6 +49,11 @@ struct Blob {
   // which means they would otherwise be re-merged on the very next frame,
   // before they had a chance to drift apart.
   double merge_cooldown = 0.0;
+
+  // Local visual state only: physical mass remains radius squared. A blob
+  // finishes its morph before another topology change, keeping this bounded
+  // to two lobes rather than accumulating snapshots or full-frame trails.
+  ShapeTransition shape;
 };
 
 // A blob system with thermal buoyancy, in lamp coordinates where y grows

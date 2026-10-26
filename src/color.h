@@ -13,6 +13,17 @@ inline bool operator==(const Rgb& a, const Rgb& b) {
 }
 inline bool operator!=(const Rgb& a, const Rgb& b) { return !(a == b); }
 
+// Indexed xterm colour, or an RGB triple tagged above the 8-bit index range.
+// Keeping this in the cell cache makes RGB-only palette changes repaint too.
+using ColorCode = std::uint32_t;
+constexpr ColorCode kRgbColorFlag = 1u << 24;
+
+inline ColorCode rgb_color_code(Rgb c) {
+  return kRgbColorFlag | (ColorCode{c.r} << 16) | (ColorCode{c.g} << 8) | c.b;
+}
+
+Rgb color_code_to_rgb(ColorCode code);
+
 struct Oklab {
   double L = 0.0;
   double a = 0.0;

@@ -14,6 +14,14 @@ TEST(minimum_size_is_enforced) {
   CHECK(!is_size_usable(TermSize{0, 0}));
 }
 
+TEST(truecolor_requires_an_explicit_capability_advertisement) {
+  CHECK(supports_truecolor("truecolor", "xterm-256color"));
+  CHECK(supports_truecolor("24bit", "xterm"));
+  CHECK(supports_truecolor("", "xterm-direct"));
+  CHECK(!supports_truecolor("", "xterm-256color"));
+  CHECK(!supports_truecolor("", ""));
+}
+
 TEST(signal_flags_start_clear) {
   CHECK_EQ(g_should_quit, 0);
   CHECK_EQ(g_resized, 0);

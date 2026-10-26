@@ -87,3 +87,35 @@ Ramp build_ramp(double temperature01, std::size_t entries) {
 
   return ramp;
 }
+
+const Ramp& PaletteFade::update(const Ramp& target, double dt) {
+  constexpr double kFadeSeconds = 1.5;
+  if (target_.indices != target.indices) {
+    const bool first_or_resized = displayed_.size() != target.size();
+    target_ = target;
+    from_.resize(target.size());
+    to_.resize(target.size());
+    if (first_or_resized) displayed_.indices = target.indices;
+    for (std::size_t i = 0; i < target.size(); ++i) {
+      // Retarget from the colour actually on screen, never from the previous
+      // goal. Reversing temperature mid-fade must not introduce a jump.
+      from_[i] = rgb_to_oklab(color_code_to_rgb(displayed_[i]));
+      to_[i] = rgb_to_oklab(color_code_to_rgb(target[i]));
+    }
+    elapsed_ = first_or_resized ? kFadeSeconds : 0.0;
+  }
+  // A stalled frame should not consume the entire fade in one visible step.
+  elapsed_ = std::min(kFadeSeconds, elapsed_ + std::clamp(dt, 0.0, 0.1));
+  const double t = elapsed_ / kFadeSeconds;
+  const double blend = t * t * (3.0 - 2.0 * t);
+  for (std::size_t i = 0; i < target.size(); ++i) {
+    const Oklab a = from_[i];
+    const Oklab b = to_[i];
+    const Rgb color = elapsed_ >= kFadeSeconds ? color_code_to_rgb(target[i]) :
+        oklab_to_rgb(Oklab{a.L + (b.L - a.L) * blend,
+                          a.a + (b.a - a.a) * blend,
+                          a.b + (b.b - a.b) * blend});
+    displayed_.indices[i] = rgb_color_code(color);
+  }
+  return displayed_;
+}

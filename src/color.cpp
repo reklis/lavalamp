@@ -82,6 +82,14 @@ Rgb xterm256_to_rgb(std::uint8_t index) {
   return Rgb{0, 0, 0};
 }
 
+Rgb color_code_to_rgb(ColorCode code) {
+  if ((code & kRgbColorFlag) == 0)
+    return xterm256_to_rgb(static_cast<std::uint8_t>(code));
+  return Rgb{static_cast<std::uint8_t>(code >> 16),
+             static_cast<std::uint8_t>(code >> 8),
+             static_cast<std::uint8_t>(code)};
+}
+
 std::uint8_t quantize_to_xterm256(Rgb c) {
   const Oklab target = rgb_to_oklab(c);
 

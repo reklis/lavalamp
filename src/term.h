@@ -2,6 +2,7 @@
 
 #include <csignal>
 #include <optional>
+#include <string_view>
 #include <termios.h>
 
 struct TermSize {
@@ -19,6 +20,10 @@ TermSize query_term_size_or(int fd, TermSize fallback);
 // Below 20x10 there is not enough room for the lamp to read as anything, so
 // the program refuses rather than painting a corrupt handful of cells.
 bool is_size_usable(TermSize size);
+
+// Conservative capability check; plain xterm-256color is not a truecolor
+// advertisement. Takes environment values explicitly for deterministic tests.
+bool supports_truecolor(std::string_view colorterm, std::string_view term);
 
 // RAII ownership of the terminal's state. The destructor runs on every exit
 // path -- including signals, because the main loop exits by observing a flag

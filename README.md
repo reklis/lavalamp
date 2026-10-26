@@ -6,9 +6,15 @@ the heat comes from what your machine is actually doing.
 The whole terminal is the inside of the lamp — no base, no cap, no border, no
 stats overlay. Blobs of wax heat at the floor, rise, cool at the ceiling and
 sink, merging and splitting on the way. It is drawn entirely out of CP437 block
-and shading glyphs (`░▒▓█` and the upper half block `▀`) in 256-colour mode, so
-it bands and dithers the way hand-made ANSI art does rather than looking like a
-smooth gradient.
+and shading glyphs (`░▒▓█` and the upper half block `▀`) with a 256-colour
+palette, so it bands and dithers like hand-made ANSI art rather than looking
+like a smooth gradient. On truecolor terminals, palette changes fade over
+1.5 seconds instead of switching the whole background at once. Terminals that
+only advertise 256 colours retain indexed output.
+
+Merges, splits, and network droplets morph over 350 ms instead of popping
+between shapes. Network jets reuse existing wax, so long-running sessions
+cannot flood into a solid colour.
 
 ## The machine is the heat source
 
@@ -30,12 +36,17 @@ feed on its own load.
 
 - **Linux.** Every metric here is Linux-specific plumbing (`/proc`, sysfs,
   `nvidia-smi`).
-- A UTF-8, 256-colour terminal at least 20x10.
-- C++20 compiler and CMake. No third-party dependencies.
+- A UTF-8, 256-colour terminal at least 20x10. Truecolor is recommended for
+  smooth palette fades; detected through `COLORTERM=truecolor`,
+  `COLORTERM=24bit`, or a `TERM` ending in `-direct`.
+- C++20 compiler and CMake 3.20 or newer. No third-party dependencies.
+- Optional: `nvidia-smi` for NVIDIA GPU utilization; AMD GPUs use sysfs.
 
 ## Build
 
 ```sh
+git clone https://github.com/reklis/lavalamp.git
+cd lavalamp
 cmake -S . -B build
 cmake --build build -j
 ```
@@ -84,3 +95,8 @@ Not configuration — these exist for tuning and are not a supported interface.
 
 `docs/superpowers/specs/2026-10-26-ansi-lavalamp-design.md` covers the intent
 and the reasoning, including the things it deliberately is not.
+
+## License
+
+Licensed under the [GNU General Public License v3.0](LICENSE)
+(`GPL-3.0-only`).
