@@ -19,6 +19,7 @@ add_library(lavalamp_core STATIC
   src/field.cpp
   src/renderer.cpp
   src/term.cpp
+  src/metrics/heat.cpp
 )
 target_include_directories(lavalamp_core PUBLIC src)
 
@@ -36,6 +37,7 @@ add_executable(lavalamp_tests
   tests/test_glyph.cpp
   tests/test_renderer.cpp
   tests/test_term.cpp
+  tests/test_smoother.cpp
 )
 target_link_libraries(lavalamp_tests PRIVATE lavalamp_core)
 target_include_directories(lavalamp_tests PRIVATE tests)
