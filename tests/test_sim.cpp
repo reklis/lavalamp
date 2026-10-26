@@ -193,3 +193,55 @@ TEST(make_seed_varies_without_using_random_device) {
   CHECK(a != 0u);
   CHECK(a != b);
 }
+
+TEST(a_split_does_not_teleport_its_children_apart) {
+  // Merges read as smooth because they fire only when the two blobs already
+  // overlap heavily -- the field already looked like one blob, so nothing
+  // structural changes. A split that places its children a full parent
+  // radius apart in ONE frame instantly creates a configuration MORE
+  // separated than the one that would have triggered a merge, and the eye
+  // reads that as two objects teleporting out of one. Per-pixel field delta
+  // is no larger than a merge's; the structure is what gives it away.
+  //
+  // So children must start effectively coincident and separate under their
+  // own velocity.
+  LavaSim s(100, 60, 42);
+  Heat h;
+  h.cpu = 1.0;
+  h.cpu_ok = true;
+  h.gpu = 0.8;
+  h.gpu_ok = true;
+  s.set_heat(h);
+
+  for (int i = 0; i < 300; ++i) s.step(1.0 / 60);
+
+  std::size_t previous = s.blobs().size();
+  int splits_seen = 0;
+  double worst_separation = 0.0;
+
+  for (int frame = 0; frame < 3000; ++frame) {
+    s.step(1.0 / 60);
+    const std::size_t now = s.blobs().size();
+    if (now > previous) {
+      ++splits_seen;
+      // The freshly split pair is the closest pair: merging runs before
+      // splitting in step(), so no settled pair is closer than the merge
+      // threshold.
+      double closest = 1e9;
+      for (std::size_t i = 0; i < s.blobs().size(); ++i) {
+        for (std::size_t j = i + 1; j < s.blobs().size(); ++j) {
+          const Blob& a = s.blobs()[i];
+          const Blob& b = s.blobs()[j];
+          const double mean_radius = (a.radius + b.radius) * 0.5;
+          if (mean_radius <= 0.0) continue;
+          closest = std::min(closest, (a.pos - b.pos).length() / mean_radius);
+        }
+      }
+      worst_separation = std::max(worst_separation, closest);
+    }
+    previous = now;
+  }
+
+  CHECK(splits_seen > 10);           // the scenario must actually split
+  CHECK(worst_separation < 0.35);    // was 1.4 -- a teleport past the merge threshold
+}

@@ -27,6 +27,12 @@ struct Blob {
   Vec2 vel;
   double radius = 1.0;
   double temp = 0.0;
+
+  // Seconds during which this blob refuses to merge. Set when a blob splits:
+  // the children start coincident so the split is structurally continuous,
+  // which means they would otherwise be re-merged on the very next frame,
+  // before they had a chance to drift apart.
+  double merge_cooldown = 0.0;
 };
 
 // A blob system with thermal buoyancy, in lamp coordinates where y grows
