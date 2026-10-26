@@ -22,6 +22,7 @@ add_library(lavalamp_core STATIC
   src/metrics/heat.cpp
   src/metrics/cpu.cpp
   src/metrics/gpu.cpp
+  src/metrics/net.cpp
 )
 target_include_directories(lavalamp_core PUBLIC src)
 
@@ -42,6 +43,7 @@ add_executable(lavalamp_tests
   tests/test_smoother.cpp
   tests/test_cpu.cpp
   tests/test_gpu.cpp
+  tests/test_net.cpp
 )
 target_link_libraries(lavalamp_tests PRIVATE lavalamp_core)
 target_include_directories(lavalamp_tests PRIVATE tests)
