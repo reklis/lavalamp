@@ -14,6 +14,7 @@ add_compile_options(-Wall -Wextra)
 # files here, and a glob would silently miss them until the next configure.
 add_library(lavalamp_core STATIC
   src/color.cpp
+  src/palette.cpp
 )
 target_include_directories(lavalamp_core PUBLIC src)
 
@@ -27,6 +28,7 @@ add_executable(lavalamp_tests
   tests/test_harness.cpp
   tests/test_smoke.cpp
   tests/test_color.cpp
+  tests/test_palette.cpp
 )
 target_link_libraries(lavalamp_tests PRIVATE lavalamp_core)
 target_include_directories(lavalamp_tests PRIVATE tests)
