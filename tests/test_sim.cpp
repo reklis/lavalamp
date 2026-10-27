@@ -375,3 +375,55 @@ TEST(a_split_does_not_teleport_its_children_apart) {
   CHECK(splits_seen > 10);           // the scenario must actually split
   CHECK(worst_separation < 0.35);    // was 1.4 -- a teleport past the merge threshold
 }
+
+TEST(memory_load_increases_viscous_drag) {
+  Heat idle, loaded;
+  idle.memory_ok = loaded.memory_ok = true;
+  loaded.memory = 1.0;
+  CHECK(total_speed_after(LavaSim(80, 50, 5), loaded, 60) <
+        total_speed_after(LavaSim(80, 50, 5), idle, 60) * 0.8);
+}
+
+TEST(playback_audio_adds_motion_without_adding_wax) {
+  Heat loud;
+  loud.audio_ok = true;
+  loud.audio = 1.0;
+  CHECK(total_speed_after(LavaSim(80, 50, 5), loud, 15) >
+        total_speed_after(LavaSim(80, 50, 5), Heat{}, 15) * 1.5);
+
+  LavaSim s(80, 50, 5);
+  loud.memory_ok = true;
+  loud.memory = 1.0;
+  loud.net_ok = true;
+  loud.net = 1.0;
+  s.set_heat(loud);
+  const double area = total_blob_area(s);
+  for (int i = 0; i < 18000; ++i) s.step(1.0 / 60);
+  CHECK_NEAR(total_blob_area(s), area, area * 1e-9);
+  CHECK(s.blobs().size() <= 44);
+  for (const Blob& b : s.blobs()) {
+    CHECK(std::isfinite(b.vel.x) && std::isfinite(b.vel.y));
+    CHECK(b.pos.x >= 0 && b.pos.x <= 80 && b.pos.y >= 0 && b.pos.y <= 50);
+  }
+}
+
+TEST(unavailable_audio_and_memory_are_neutral) {
+  Heat unavailable;
+  unavailable.audio = unavailable.memory = 1.0;  // ignored without flags
+  LavaSim a(80, 50, 123), b(80, 50, 123), c(80, 50, 123);
+  b.set_heat(unavailable);
+  Heat silence;
+  silence.audio_ok = silence.memory_ok = true;
+  c.set_heat(silence);
+  for (int i = 0; i < 600; ++i) {
+    a.step(1.0 / 60);
+    b.step(1.0 / 60);
+    c.step(1.0 / 60);
+  }
+  Field fa(80, 50), fb(80, 50), fc(80, 50);
+  a.sample_into(fa);
+  b.sample_into(fb);
+  c.sample_into(fc);
+  CHECK_EQ(max_field_difference(fa, fb), 0.0);
+  CHECK_EQ(max_field_difference(fa, fc), 0.0);
+}

@@ -11,16 +11,20 @@ struct Heat {
   double gpu = 0.0;
   double net = 0.0;
   double temp = 0.0;
+  double memory = 0.0;
+  double audio = 0.0;
 
   bool cpu_ok = false;
   bool gpu_ok = false;
   bool net_ok = false;
   bool temp_ok = false;
+  bool memory_ok = false;
+  bool audio_ok = false;
 };
 
 // Exponential smoothing with separate rise and fall time constants.
 //
-// The asymmetry exists because the four inputs mean physically different
+// The asymmetry exists because the inputs mean physically different
 // things. Temperature is slow and pretending otherwise just renders noise;
 // network traffic is bursty, so it wants a fast attack and a slow decay so a
 // transfer registers immediately and then settles like a splash.

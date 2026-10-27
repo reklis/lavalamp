@@ -6,6 +6,7 @@
 namespace {
 
 constexpr double kPollSeconds = 1.0;
+constexpr double kAudioPollSeconds = 0.05;
 
 double clamp01(double v) { return std::clamp(v, 0.0, 1.0); }
 
@@ -35,6 +36,7 @@ void Collector::stop() {
   }
   wake_.notify_all();
   if (thread_.joinable()) thread_.join();
+  audio_source_.stop();
 }
 
 Heat Collector::snapshot() const {
@@ -48,13 +50,14 @@ void Collector::run() try {
   poll_once(kPollSeconds);
 
   auto previous = std::chrono::steady_clock::now();
+  auto previous_metrics = previous;
 
   for (;;) {
     {
       std::unique_lock<std::mutex> lock(mutex_);
       // Waiting on the condition variable rather than sleeping means stop()
       // returns immediately instead of blocking for up to a poll interval.
-      wake_.wait_for(lock, std::chrono::duration<double>(kPollSeconds),
+      wake_.wait_for(lock, std::chrono::duration<double>(kAudioPollSeconds),
                      [this] { return stopping_; });
       if (stopping_) return;
     }
@@ -63,7 +66,12 @@ void Collector::run() try {
     const double dt = std::chrono::duration<double>(now - previous).count();
     previous = now;
 
-    poll_once(dt);
+    poll_audio(dt);
+    const double metrics_dt = std::chrono::duration<double>(now - previous_metrics).count();
+    if (metrics_dt >= kPollSeconds) {
+      poll_once(metrics_dt);
+      previous_metrics = now;
+    }
   }
 } catch (...) {
   // An exception escaping a std::thread calls std::terminate, which would
@@ -78,6 +86,7 @@ void Collector::poll_once(double dt) {
   const std::optional<std::string> proc_stat = read_file("/proc/stat");
   const std::optional<std::string> self_stat = read_file("/proc/self/stat");
   const std::optional<std::string> net_dev = read_file("/proc/net/dev");
+  const std::optional<std::string> meminfo = read_file("/proc/meminfo");
 
   const std::optional<double> raw_cpu =
       proc_stat.has_value()
@@ -87,6 +96,8 @@ void Collector::poll_once(double dt) {
   const std::optional<double> raw_net =
       net_dev.has_value() ? net_source_.sample(*net_dev, dt) : std::nullopt;
   const std::optional<double> raw_temp = thermal_source_.sample();
+  const std::optional<double> raw_memory =
+      meminfo.has_value() ? parse_memory_usage(*meminfo) : std::nullopt;
 
   Heat heat;
 
@@ -110,6 +121,22 @@ void Collector::poll_once(double dt) {
     heat.temp_ok = true;
   }
 
+  if (raw_memory.has_value()) {
+    heat.memory = clamp01(memory_smoother_.update(*raw_memory, dt));
+    heat.memory_ok = true;
+  }
+
   const std::lock_guard<std::mutex> lock(mutex_);
+  heat.audio = published_.audio;
+  heat.audio_ok = published_.audio_ok;
   published_ = heat;
+}
+
+void Collector::poll_audio(double dt) {
+  const auto raw_audio = audio_source_.sample(dt);
+  const double level = raw_audio.has_value()
+      ? clamp01(audio_smoother_.update(*raw_audio, dt)) : 0.0;
+  const std::lock_guard<std::mutex> lock(mutex_);
+  published_.audio = level;
+  published_.audio_ok = raw_audio.has_value();
 }

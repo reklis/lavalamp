@@ -28,6 +28,9 @@ constexpr double kGravity = 8.0;
 constexpr double kBuoyancyBase = 18.0;   // at idle: hot wax still rises
 constexpr double kBuoyancyGain = 30.0;   // scaled by cpu
 constexpr double kDrag = 1.4;
+constexpr double kMemoryDragGain = 1.5;  // busy RAM makes the wax more viscous
+constexpr double kAudioPulseForce = 45.0;
+constexpr double kAudioPulseHz = 1.2;
 
 constexpr double kHeatRate = 0.9;        // per second, at the floor
 constexpr double kCoolRate = 0.7;        // per second, at the ceiling
@@ -196,6 +199,10 @@ void LavaSim::integrate(double dt) {
   const double buoyancy = kBuoyancyBase + kBuoyancyGain * cpu;
   const double turbulence = kTurbulenceBase + kTurbulenceGain * gpu;
   const double convection = 1.0 + kConvectionRateGain * cpu;
+  const double memory = channel(heat_.memory, heat_.memory_ok, 0.0);
+  const double drag = kDrag * (1.0 + kMemoryDragGain * memory);
+  const double audio = channel(heat_.audio, heat_.audio_ok, 0.0);
+  const double pulse = kAudioPulseForce * audio * std::sin(2.0 * kPi * kAudioPulseHz * time_);
 
   const double heat_zone = height_ * (1.0 - kHeatZoneFraction);
   const double cool_zone = height_ * kHeatZoneFraction;
@@ -219,8 +226,14 @@ void LavaSim::integrate(double dt) {
                                   time_ * kNoiseTimeScale);
     accel += swirl * turbulence;
 
+    // Playback swells and contracts the flow, not the amount of wax. Using
+    // forces rather than resizing kernels keeps shape transitions continuous
+    // and conserves area even with sustained loud audio.
+    const Vec2 outward = blob.pos - Vec2{width_ * 0.5, height_ * 0.5};
+    accel += outward * (pulse / std::max(outward.length(), 1.0));
+
     blob.vel += accel * dt;
-    blob.vel = blob.vel * std::exp(-kDrag * dt);
+    blob.vel = blob.vel * std::exp(-drag * dt);
     blob.pos += blob.vel * dt;
   }
 }

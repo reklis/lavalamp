@@ -6,15 +6,17 @@
 #include <string>
 #include <thread>
 
+#include "metrics/audio.h"
 #include "metrics/cpu.h"
 #include "metrics/gpu.h"
 #include "metrics/heat.h"
+#include "metrics/memory.h"
 #include "metrics/net.h"
 #include "metrics/procfs.h"
 #include "metrics/thermal.h"
 
-// Polls the machine on its own thread at 1 Hz and publishes an immutable
-// Heat snapshot.
+// Polls system counters at 1 Hz and playback audio at 20 Hz on its own
+// thread, publishing an immutable Heat snapshot.
 //
 // The separate thread is not an optimisation, it is a requirement: nvidia-smi
 // costs around 100 ms per call, and doing that inside a 30 fps render loop
@@ -39,6 +41,7 @@ class Collector {
  private:
   void run();
   void poll_once(double dt);
+  void poll_audio(double dt);
 
   mutable std::mutex mutex_;
   std::condition_variable wake_;
@@ -46,6 +49,7 @@ class Collector {
   std::thread thread_;
   Heat published_{};
 
+  AudioSource audio_source_;
   CpuSource cpu_source_;
   GpuSource gpu_source_;
   NetSource net_source_;
@@ -58,4 +62,6 @@ class Collector {
   Smoother gpu_smoother_{2.0, 2.0};
   Smoother net_smoother_{0.2, 3.0};
   Smoother temp_smoother_{10.0, 10.0};
+  Smoother memory_smoother_{3.0, 3.0};
+  Smoother audio_smoother_{0.05, 0.3};
 };

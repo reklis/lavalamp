@@ -23,6 +23,8 @@ add_library(lavalamp_core STATIC
   src/renderer.cpp
   src/term.cpp
   src/metrics/heat.cpp
+  src/metrics/audio.cpp
+  src/metrics/memory.cpp
   src/metrics/cpu.cpp
   src/metrics/gpu.cpp
   src/metrics/net.cpp
@@ -50,6 +52,8 @@ add_executable(lavalamp_tests
   tests/test_renderer.cpp
   tests/test_term.cpp
   tests/test_smoother.cpp
+  tests/test_audio.cpp
+  tests/test_memory.cpp
   tests/test_cpu.cpp
   tests/test_gpu.cpp
   tests/test_net.cpp

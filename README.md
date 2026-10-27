@@ -24,13 +24,22 @@ cannot flood into a solid colour.
 | Temperature | The palette — deep purples and magentas when cool, climbing through orange and amber to white-hot |
 | GPU utilization | Turbulence — blobs tear and swirl rather than simply moving faster |
 | Network throughput | Jets of droplets fired up from the floor on bursts |
+| RAM usage (excluding reclaimable cache) | Viscosity — fuller memory makes the wax move more heavily |
+| Playback audio level | Rhythmic outward/inward pulses, stronger with louder sound |
 
 Idle looks slow, fat and lazy. Start a build and the lamp gets violent. Every
-channel degrades independently: no readable GPU counter, no thermal zone or no
-network just means fewer moods, not a broken lamp.
+channel degrades independently: missing counters or audio tools just mean
+fewer moods, not a broken lamp.
 
 CPU is read with this process's own time subtracted, so the renderer cannot
-feed on its own load.
+feed on its own load. RAM usage comes from `MemTotal` and `MemAvailable` in
+`/proc/meminfo`, so filesystem caches do not make the lamp falsely sluggish.
+
+Audio monitors the default **playback output**, never the microphone, using
+`pw-record` (PipeWire) or `parec` (PulseAudio). The playback level is sampled at
+20 Hz with fast attack and a short decay; it controls pulse strength, not
+beat detection. Audio samples are processed in memory and never saved.
+Without either helper or an accessible audio server, this channel stays off.
 
 ## Requirements
 
@@ -41,6 +50,8 @@ feed on its own load.
   `COLORTERM=24bit`, or a `TERM` ending in `-direct`.
 - C++20 compiler and CMake 3.20 or newer. No third-party dependencies.
 - Optional: `nvidia-smi` for NVIDIA GPU utilization; AMD GPUs use sysfs.
+- Optional: `pw-record` (PipeWire tools) or `parec` (PulseAudio utilities) for
+  playback-reactive motion. No audio development libraries are needed.
 
 ## Build
 

@@ -5,7 +5,8 @@
 TEST(snapshot_before_start_is_all_unavailable) {
   Collector c;
   Heat h = c.snapshot();
-  CHECK(!h.cpu_ok && !h.gpu_ok && !h.net_ok && !h.temp_ok);
+  CHECK(!h.cpu_ok && !h.gpu_ok && !h.net_ok && !h.temp_ok &&
+        !h.memory_ok && !h.audio_ok);
   CHECK_EQ(h.cpu, 0.0);
 }
 
@@ -18,6 +19,8 @@ TEST(snapshot_values_are_always_in_range) {
     CHECK(h.gpu >= 0.0 && h.gpu <= 1.0);
     CHECK(h.net >= 0.0 && h.net <= 1.0);
     CHECK(h.temp >= 0.0 && h.temp <= 1.0);
+    CHECK(h.memory >= 0.0 && h.memory <= 1.0);
+    CHECK(h.audio >= 0.0 && h.audio <= 1.0);
   }
   c.stop();
 }

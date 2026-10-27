@@ -70,7 +70,8 @@ class LavaSim {
   void resize(double width, double height);
 
   // cpu -> convection rate and target blob count; gpu -> turbulence and
-  // tearing; net -> droplet impulses from the floor. `temp` is deliberately
+  // tearing; net -> droplet impulses from the floor; memory -> viscosity;
+  // audio -> radial pulses. `temp` is deliberately
   // unused here: it drives the palette, not the motion. An unavailable
   // channel contributes its neutral value, so the lamp stays alive with any
   // subset of the metrics present.
